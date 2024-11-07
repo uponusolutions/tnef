@@ -1,13 +1,10 @@
-module github.com/teamwork/tnef
+module github.com/uponus/tnef
 
-go 1.19
-
-require (
-	github.com/teamwork/test v0.0.0-20180710160628-fb2f93f656a3
-	github.com/teamwork/utils v0.0.0-20180828160709-681764439846
-)
+go 1.23
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/testify v1.9.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

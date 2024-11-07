@@ -1,0 +1,123 @@
+#
+# Standard golangci settings.
+#
+# The line-length-limit is disabled by default. Set it to a value appropriate
+# for your project. When using swagger inline definitions the lines can become
+# long.
+#
+# Look for gosec settings. Check if TLS and an unsecure rand generator is
+# appropriate for your project. Never allow G404 for cryptographic input! G402
+# must be used with caution.
+
+issues:
+  exclude-use-default: false
+  exclude:
+
+linters:
+  enable:
+    - revive
+    - gosec
+    - godot
+    - zerologlint
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - os.Remove
+  gosec:
+    exclude-generated: true
+    excludes:
+      #- G204 # For our openssl test calls.
+  godot:
+    scope: toplevel
+    exclude:
+      - "^todo:"
+      - "^fixme:"
+      - "//"
+  revive:
+    ignore-generated-header: true
+    enable-all-rules: true
+    rules:
+      - name: banned-characters
+        severity: warning
+        disabled: false
+        arguments: ["Ω", "Σ", "σ"]
+      - name: function-result-limit
+        severity: warning
+        disabled: false
+        arguments: [4]
+      - name: function-length
+        severity: warning
+        disabled: false
+        arguments: [80, 200]
+      - name: line-length-limit
+        severity: warning
+        disabled: true
+        arguments: [120]
+      - name: cyclomatic
+        severity: warning
+        disabled: true
+        arguments: [3]
+      - name: cognitive-complexity
+        severity: warning
+        disabled: false
+        arguments: [40]
+      - name: argument-limit
+        severity: warning
+        disabled: false
+        arguments: [8]
+      - name: file-header
+        severity: warning
+        disabled: true
+      - name: max-public-structs
+        severity: warning
+        disabled: true
+        arguments: [3]
+      - name: add-constant
+        severity: warning
+        disabled: true
+        arguments:
+          - maxLitCount: "3"
+            allowStrs: '""'
+            allowInts: "0,1,2"
+            allowFloats: "0.0,0.,1.0,1.,2.0,2."
+      # done by other checkers
+      - name: unhandled-error
+        severity: warning
+        disabled: true
+        arguments:
+          - "fmt.Printf"
+          - "myFunction"
+      - name: comment-spacings
+        severity: warning
+        disabled: true
+      - name: package-comments
+        severity: warning
+        disabled: false
+      - name: flag-parameter
+        severity: warning
+        disabled: true
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: useless-break
+        severity: warning
+        disabled: true
+      - name: import-shadowing
+        severity: warning
+        disabled: true
+      # ok to exit in doErr
+      - name: deep-exit
+        severity: warning
+        disabled: true
+      # Allow OpenSSL Names in GO
+      - name: var-naming
+        severity: warning
+        disabled: true
+      # Allow setting zero value, to be compatible with C.
+      - name: var-declaration
+        severity: warning
+        disabled: true
+      # Allow C Tests have same name in lowercase.
+      - name: confusing-naming
+        severity: warning
+        disabled: true

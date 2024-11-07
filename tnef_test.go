@@ -1,10 +1,12 @@
 package tnef
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/teamwork/test"
-	"github.com/teamwork/utils/sliceutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAttachments(t *testing.T) {
@@ -81,33 +83,24 @@ func TestAttachments(t *testing.T) {
 		{"empty-file", nil, ErrNoMarker.Error()},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			out, err := Decode(test.Read(t, "./testdata", tt.in+".tnef"))
-			if !test.ErrorContains(err, tt.wantErr) {
-				t.Fatalf("wrong err\ngot:  %v\nwant: %v", err, tt.wantErr)
-			}
-			if err != nil {
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", tc.in+".tnef"))
+			require.NoError(t, err)
+
+			out, err := Decode(raw)
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
 				return
 			}
-
-			if len(out.Attachments) != len(tt.wantAttachments) {
-				t.Errorf("wrong length; want %v, got %v",
-					len(tt.wantAttachments), len(out.Attachments))
-			}
+			require.NoError(t, err)
+			assert.Equal(t, len(out.Attachments), len(tc.wantAttachments))
 
 			titles := []string{}
 			for _, a := range out.Attachments {
 				titles = append(titles, a.Title)
-				//if len(a.Data) == 0 {
-				//	t.Error("len(a.Data) is 0")
-				//}
 			}
-			for _, want := range tt.wantAttachments {
-				if !sliceutil.InStringSlice(titles, want) {
-					t.Errorf("did not find %#v in the attachments: %#v", want, titles)
-				}
-			}
+			assert.Equal(t, titles, tc.wantAttachments)
 		})
 	}
 }

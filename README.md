@@ -1,12 +1,11 @@
-[![Build Status](https://travis-ci.com/Teamwork/tnef.svg?branch=master)](https://travis-ci.com/Teamwork/tnef)
-[![codecov](https://codecov.io/gh/Teamwork/tnef/branch/master/graph/badge.svg)](https://codecov.io/gh/Teamwork/tnef)
-[![GoDoc](https://godoc.org/github.com/Teamwork/tnef?status.svg)](https://godoc.org/github.com/Teamwork/tnef)
+
+[![GoDoc](https://godoc.org/github.com/uponus/tnef?status.svg)](https://godoc.org/github.com/uponus/tnef)
 
 With this library you can extract the body and attachments from Transport
 Neutral Encapsulation Format (TNEF) files.
 
-This work is based on https://github.com/koodaamo/tnefparse and
-http://www.freeutils.net/source/jtnef/.
+This work is based on https://github.com/koodaamo/tnefparse,
+http://www.freeutils.net/source/jtnef/ and https://github.com/teamwork/tnef.
 
 ## Example usage
 
@@ -16,7 +15,7 @@ import (
 
 	"io/ioutil"
 	"os"
-	"github.com/teamwork/tnef"
+	"github.com/uponus/tnef"
 )
 
 func main() {

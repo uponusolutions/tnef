@@ -3,18 +3,19 @@ package tnef // import "github.com/teamwork/tnef"
 
 import (
 	"errors"
-	"io/ioutil"
+	"os"
 	"strings"
 )
 
+// nolint: godot
 const (
 	tnefSignature = 0x223e9f78
-	//lvlMessage    = 0x01
+	// lvlMessage    = 0x01
 	lvlAttachment = 0x02
 )
 
 // These can be used to figure out the type of attribute
-// an object is
+// an object is.
 const (
 	ATTOWNER                   = 0x0000 // Owner
 	ATTSENTFOR                 = 0x0001 // Sent For
@@ -90,7 +91,7 @@ func (a *Attachment) addAttr(obj tnefObject) {
 // DecodeFile is a utility function that reads the file into memory
 // before calling the normal Decode function on the data.
 func DecodeFile(path string) (*Data, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint: gosec
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func Decode(data []byte) (*Data, error) {
 		return nil, ErrNoMarker
 	}
 
-	//key := binary.LittleEndian.Uint32(data[4:6])
+	// key := binary.LittleEndian.Uint32(data[4:6])
 	offset := 6
 	var attachment *Attachment
 	tnef := &Data{
@@ -156,9 +157,10 @@ func decodeTNEFObject(data []byte) (object tnefObject) {
 	offset += 4
 	object.Data = data[offset : offset+attLength]
 	offset += attLength
-	//checksum := byteToInt(data[offset : offset+2])
+	// checksum := byteToInt(data[offset : offset+2])
 	offset += 2
 
 	object.Length = offset
-	return
+
+	return object
 }
