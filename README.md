@@ -1,5 +1,6 @@
-
+[![Go](https://github.com/uponus/tnef/actions/workflows/go.yml/badge.svg)](https://github.com/uponus/tnef/actions/workflows/go.yml)
 [![GoDoc](https://godoc.org/github.com/uponus/tnef?status.svg)](https://godoc.org/github.com/uponus/tnef)
+[![CodeQL](https://github.com/uponus/tnef/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/uponus/tnef/actions/workflows/codeql-analysis.yml)
 
 With this library you can extract the body and attachments from Transport
 Neutral Encapsulation Format (TNEF) files.
