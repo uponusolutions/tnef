@@ -20,10 +20,10 @@ func TestAttachments(t *testing.T) {
 			"bookmark.htm",
 		}, ""},
 		// will panic!
-		//{"panic", []string{
-		//	"ZAPPA_~2.JPG",
-		//	"bookmark.htm",
-		//}},
+		{"panic", []string{
+			"ZAPPA_~2.JPG",
+			"bookmark.htm",
+		}, "attribute length exceeds buffer size"},
 		//{"MAPI_ATTACH_DATA_OBJ", []string{
 		//	"VIA_Nytt_1402.doc",
 		//	"VIA_Nytt_1402.pdf",
@@ -43,7 +43,7 @@ func TestAttachments(t *testing.T) {
 		//	"boot.ini",
 		//	"data-before-name-body.rtf",
 		//}},
-		// {"garbage-at-end", []string{}, ""}, // panics
+		{"garbage-at-end", []string{}, "tnef object is to short"}, // panics
 		//{"long-filename", []string{
 		//	"long-filename-body.rtf",
 		//}},
@@ -60,7 +60,7 @@ func TestAttachments(t *testing.T) {
 		}, ""},
 		//{"rtf", []string{
 		//	"rtf-body.rtf",
-		//}},
+		//}, ""},
 		//{"triples", []string{
 		//	"triples-body.rtf",
 		//}},
@@ -94,13 +94,13 @@ func TestAttachments(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, len(out.Attachments), len(tc.wantAttachments))
+			assert.Equal(t, len(tc.wantAttachments), len(out.Attachments))
 
 			titles := []string{}
 			for _, a := range out.Attachments {
 				titles = append(titles, a.Title)
 			}
-			assert.Equal(t, titles, tc.wantAttachments)
+			assert.Equal(t, tc.wantAttachments, titles)
 		})
 	}
 }

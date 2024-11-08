@@ -3,6 +3,7 @@ package tnef // import "github.com/teamwork/tnef"
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -114,7 +115,11 @@ func Decode(data []byte) (*Data, error) {
 	}
 
 	for offset < len(data) {
-		obj := decodeTNEFObject(data[offset:])
+		obj, err := decodeTNEFObject(data[offset:])
+		if err != nil {
+			return nil, err
+		}
+
 		offset += obj.Length
 
 		if obj.Name == ATTATTACHRENDDATA {
@@ -144,8 +149,15 @@ func Decode(data []byte) (*Data, error) {
 	return tnef, nil
 }
 
-func decodeTNEFObject(data []byte) (object tnefObject) {
+const minTnefSize = 11
+
+func decodeTNEFObject(data []byte) (object tnefObject, err error) {
 	offset := 0
+
+	dataLen := len(data)
+	if dataLen < minTnefSize {
+		return object, errors.New("tnef object is to short")
+	}
 
 	object.Level = byteToInt(data[offset : offset+1])
 	offset++
@@ -155,12 +167,17 @@ func decodeTNEFObject(data []byte) (object tnefObject) {
 	offset += 2
 	attLength := byteToInt(data[offset : offset+4])
 	offset += 4
+
+	if attLength > dataLen+minTnefSize {
+		return object, fmt.Errorf("attribute length exceeds buffer size %d > %d", attLength, dataLen)
+	}
 	object.Data = data[offset : offset+attLength]
+
 	offset += attLength
 	// checksum := byteToInt(data[offset : offset+2])
 	offset += 2
 
 	object.Length = offset
 
-	return object
+	return object, nil
 }
