@@ -4,6 +4,7 @@ package tnef // import "github.com/teamwork/tnef"
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -11,7 +12,7 @@ import (
 // nolint: godot
 const (
 	tnefSignature = 0x223e9f78
-	// lvlMessage    = 0x01
+	lvlMessage    = 0x01
 	lvlAttachment = 0x02
 )
 
@@ -52,41 +53,66 @@ const (
 	ATTORIGNINALMESSAGECLASS   = 0x9008 // Original Message Class
 )
 
-type tnefObject struct {
-	Level  int
-	Name   int
-	Type   int
-	Data   []byte
-	Length int
+type tnefAttribute struct {
+	Level    int
+	Name     int
+	Type     int
+	Data     []byte
+	Checksum []byte
+	Length   int
 }
 
 // Attachment contains standard attachments that are embedded
 // within the TNEF file, with the name and data of the file extracted.
 type Attachment struct {
-	Title string
-	Data  []byte
+	Title          string
+	LongFileName   string
+	Data           []byte
+	MIMEType       string
+	ContentID      string
+	MAPIAttributes []MAPIAttribute
 }
-
-// ErrNoMarker signals that the file did not start with the fixed TNEF marker,
-// meaning it's not in the TNEF file format we recognize (e.g. it just has the
-// .tnef extension, or a wrong MIME type).
-var ErrNoMarker = errors.New("file did not begin with a TNEF marker")
 
 // Data contains the various data from the extracted TNEF file.
 type Data struct {
-	Body        []byte
-	BodyHTML    []byte
-	Attachments []*Attachment
-	Attributes  []MAPIAttribute
+	Body              []byte
+	Attachments       []*Attachment
+	MAPIAttributes    []MAPIAttribute
+	MessageClass      string
+	Subject           string
+	CodePagePrimary   int
+	CodePageSecondary int
 }
 
-func (a *Attachment) addAttr(obj tnefObject) {
-	switch obj.Name {
+func (a *Attachment) addAttr(attr tnefAttribute) error {
+	switch attr.Name {
+	case ATTDATEMODIFY:
+	case ATTATTACHMENT:
+		var err error
+		a.MAPIAttributes, err = decodeMapi(attr.Data)
+		if err != nil {
+			return err
+		}
+
+		for _, att := range a.MAPIAttributes {
+			switch att.Name {
+			case MAPIAttachLongFilename:
+				a.LongFileName, _ = ToUTF8String(att.Type, att.Data)
+			case MAPIAttachMimeTag:
+				a.MIMEType, _ = ToUTF8String(att.Type, att.Data)
+			case MAPIAttachDataObj:
+				// TODO: Replace data?
+			case MAPIAttachContentId:
+				a.ContentID, _ = ToUTF8String(att.Type, att.Data)
+			}
+		}
 	case ATTATTACHTITLE:
-		a.Title = strings.Replace(string(obj.Data), "\x00", "", -1)
+		a.Title = strings.Replace(string(attr.Data), "\x00", "", -1)
 	case ATTATTACHDATA:
-		a.Data = obj.Data
+		a.Data = attr.Data
 	}
+
+	return nil
 }
 
 // DecodeFile is a utility function that reads the file into memory
@@ -103,81 +129,118 @@ func DecodeFile(path string) (*Data, error) {
 // Decode will accept a stream of bytes in the TNEF format and extract the
 // attachments and body into a Data object.
 func Decode(data []byte) (*Data, error) {
-	if len(data) < 4 || byteToInt(data[0:4]) != tnefSignature {
-		return nil, ErrNoMarker
+	e := func(err error) (*Data, error) {
+		return nil, fmt.Errorf("tnef decode error: %w", err)
 	}
 
+	r := newTNEFReader(data)
+
+	sigValid := false
+	err := r.rb(4, func(v []byte) {
+		sigValid = byteToInt(v) == tnefSignature
+	})
+	if !sigValid {
+		return e(fmt.Errorf("tnef signature not found: %w", err))
+	}
+
+	// Skip key.
 	// key := binary.LittleEndian.Uint32(data[4:6])
-	offset := 6
+	if err := r.skip(2); err != nil {
+		return e(err)
+	}
+
 	var attachment *Attachment
 	tnef := &Data{
 		Attachments: []*Attachment{},
 	}
 
-	for offset < len(data) {
-		obj, err := decodeTNEFObject(data[offset:])
+	for {
+		attr, err := readTNEFAttribute(r)
 		if err != nil {
-			return nil, err
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return e(err)
 		}
 
-		offset += obj.Length
-
-		if obj.Name == ATTATTACHRENDDATA {
+		if attr.Name == ATTATTACHRENDDATA {
 			attachment = new(Attachment)
 			tnef.Attachments = append(tnef.Attachments, attachment)
-		} else if obj.Level == lvlAttachment {
-			attachment.addAttr(obj)
-		} else if obj.Name == ATTMAPIPROPS {
-			var err error
-			tnef.Attributes, err = decodeMapi(obj.Data)
-			if err != nil {
-				return nil, err
+		}
+
+		switch attr.Level {
+		case lvlMessage:
+			switch attr.Name {
+			case ATTBODY:
+				tnef.Body = attr.Data
+			case ATTMAPIPROPS:
+				tnef.MAPIAttributes, err = decodeMapi(attr.Data)
+				if err != nil {
+					return e(err)
+				}
+			case ATTMESSAGECLASS:
+				tnef.MessageClass, _ = ToUTF8String(szmapiString, attr.Data)
+			case ATTSUBJECT:
+				tnef.Subject, _ = ToUTF8String(szmapiUnicodeString, attr.Data)
+			case ATTOEMCODEPAGE:
+				if attr.Length < 6 {
+					continue
+				}
+				tnef.CodePagePrimary = byteToInt(attr.Data[0:2])
+				tnef.CodePageSecondary = byteToInt(attr.Data[2:])
+			}
+		case lvlAttachment:
+			if attachment == nil {
+				return e(errors.New("attachment level reached, but attachment is nil"))
 			}
 
-			// Get the body property if it's there
-			for _, attr := range tnef.Attributes {
-				switch attr.Name {
-				case MAPIBody:
-					tnef.Body = attr.Data
-				case MAPIBodyHTML:
-					tnef.BodyHTML = attr.Data
-				}
-			}
+			attachment.addAttr(attr)
+		default:
+			return nil, fmt.Errorf("invalid level type attribute: %d\n", attr.Level)
 		}
 	}
 
 	return tnef, nil
 }
 
-const minTnefSize = 11
-
-func decodeTNEFObject(data []byte) (object tnefObject, err error) {
-	offset := 0
-
-	dataLen := len(data)
-	if dataLen < minTnefSize {
-		return object, errors.New("tnef object is to short")
+func readTNEFAttribute(r *tnefBytesReader) (attr tnefAttribute, err error) {
+	e := func(err error) (tnefAttribute, error) {
+		return attr, fmt.Errorf("tnef attribute decode error: %w", err)
 	}
 
-	object.Level = byteToInt(data[offset : offset+1])
-	offset++
-	object.Name = byteToInt(data[offset : offset+2])
-	offset += 2
-	object.Type = byteToInt(data[offset : offset+2])
-	offset += 2
-	attLength := byteToInt(data[offset : offset+4])
-	offset += 4
-
-	if attLength > dataLen+minTnefSize {
-		return object, fmt.Errorf("attribute length exceeds buffer size %d > %d", attLength, dataLen)
+	err = r.rb(1, func(v []byte) { attr.Level = byteToInt(v) })
+	if err != nil {
+		return e(fmt.Errorf("can't read level: %w", err))
 	}
-	object.Data = data[offset : offset+attLength]
 
-	offset += attLength
-	// checksum := byteToInt(data[offset : offset+2])
-	offset += 2
+	err = r.rb(2, func(v []byte) { attr.Name = byteToInt(v) })
+	if err != nil {
+		return e(fmt.Errorf("can't read name: %w", err))
+	}
 
-	object.Length = offset
+	err = r.rb(2, func(v []byte) { attr.Type = byteToInt(v) })
+	if err != nil {
+		return e(fmt.Errorf("can't read type: %w", err))
+	}
 
-	return object, nil
+	err = r.rb(4, func(v []byte) { attr.Length = byteToInt(v) })
+	if err != nil {
+		return e(fmt.Errorf("can't read length: %w", err))
+	}
+
+	if attr.Length > 0 {
+		err = r.rb(attr.Length, func(v []byte) { attr.Data = v })
+		if err != nil {
+			return e(fmt.Errorf("can't read data: %w", err))
+		}
+	}
+
+	err = r.rb(2, func(v []byte) { attr.Checksum = v })
+	if err != nil {
+		return e(err)
+	}
+
+	attr.Length = r.read
+
+	return attr, nil
 }

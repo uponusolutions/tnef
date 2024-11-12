@@ -1,90 +1,193 @@
 package tnef
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"io"
+	"slices"
+	"strings"
+)
 
 // MAPIAttribute contains MAPI format attributes, i.e encoding type
-// headers, attachments etc. See the constants for
-// code references to find specific attributes.
+// headers, attachments etc.
+// See the constants for code references to find specific attributes.
 type MAPIAttribute struct {
-	Type int
-	Name int
-	Data []byte
-	GUID int
+	Type  int
+	Name  int
+	Names []string
+	Data  []byte
+	GUID  int
+}
+
+// Returns true if attribute has the given name.
+// The check is case insensitive.
+func (m *MAPIAttribute) HasName(name string) bool {
+	return slices.ContainsFunc(m.Names, func(n string) bool {
+		return strings.EqualFold(name, n)
+	})
+}
+
+// AsString returns the MAPIAttribites data as UTF8 string.
+// When conversion is not possible an error is returned.
+func (m *MAPIAttribute) AsString() (string, error) {
+	return ToUTF8String(m.Type, m.Data)
+}
+
+// AttributeByMAPIName returns the attribute found by name.
+func AttributeByMAPIName(attrs []MAPIAttribute, mapiName int) (attr MAPIAttribute, found bool) {
+	for _, a := range attrs {
+		if mapiName == a.Name {
+			return a, true
+		}
+	}
+
+	return attr, found
+}
+
+// AttributeByName returns the attribute found by one of its names.
+func AttributeByName(attrs []MAPIAttribute, name string) (attr MAPIAttribute, found bool) {
+	for _, a := range attrs {
+		if a.HasName(name) {
+			return a, true
+		}
+
+	}
+
+	return attr, found
+}
+
+func readAttributeTypeAndName(r *tnefBytesReader) (attrType, attrName int, err error) {
+	attrType, err = r.readInt16()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	attrName, err = r.readInt16()
+
+	return attrType, attrName, err
+}
+
+func readGuidAndNamesLen(r *tnefBytesReader) (guid, namesLen int, err error) {
+	// TODO: Convert to UUID bytes not int?
+	err = r.rb(16, func(v []byte) { guid = byteToInt(v) })
+	if err != nil {
+		return 0, 0, err
+	}
+
+	namesLen, err = r.readInt32()
+
+	return guid, namesLen, err
 }
 
 func decodeMapi(data []byte) ([]MAPIAttribute, error) {
-	var attrs []MAPIAttribute
-	dataLen := len(data)
-	offset := 0
-	numProperties := byteToInt(data[offset : offset+4])
-	offset += 4
+	e := func(err error) ([]MAPIAttribute, error) {
+		return nil, fmt.Errorf("mapi decode error: %w", err)
+	}
 
-	for i := 0; i < numProperties; i++ {
-		if offset >= dataLen {
-			continue
+	r := newTNEFReader(data)
+
+	numProperties, err := r.readInt32()
+	if err != nil {
+		return e(err)
+	}
+
+	var attrs []MAPIAttribute
+	for range numProperties {
+		var attr MAPIAttribute
+
+		/* Read type and name */
+		attr.Type, attr.Name, err = readAttributeTypeAndName(r)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return attrs, nil
+			}
+
+			return e(err)
 		}
 
-		attrType := byteToInt(data[offset : offset+2])
-		offset += 2
+		// Handle special case of GUID prefixed properties.
+		if attr.Name&GuidExistsFlag == GuidExistsFlag {
+			var namesLen int
+			attr.GUID, namesLen, err = readGuidAndNamesLen(r)
+			if err != nil {
+				return e(err)
+			}
 
-		isMultiValue := (attrType & mvFlag) != 0
-		attrType &= ^mvFlag // Remove mvFlag
+			if namesLen > 0 {
+				for range namesLen {
+					nameLen, err := r.readInt32()
+					if err != nil {
+						return e(err)
+					}
 
-		typeSize := getTypeSize(attrType)
+					s, err := r.readString(nameLen)
+					if err != nil {
+						return e(err)
+					}
+
+					if s != "" {
+						attr.Names = append(attr.Names, s)
+					}
+
+					if err := r.skip(-nameLen & 3); err != nil {
+						return e(err)
+					}
+				}
+			} else {
+				// Get the real name.
+				attr.Name, err = r.readInt32()
+				if err != nil {
+					return e(err)
+				}
+			}
+		}
+
+		isMultiValue := (attr.Type & multiValueFlag) != 0
+		attr.Type &= ^multiValueFlag // Remove multiValueFlag.
+
+		typeSize := getTypeSize(attr.Type)
 		if typeSize < 0 {
 			isMultiValue = true
-		}
-
-		attrName := byteToInt(data[offset : offset+2])
-		offset += 2
-
-		guid := 0
-		if attrName >= 0x8000 && attrName <= 0xFFFE {
-			guid = byteToInt(data[offset : offset+16])
-			offset += 16
-			kind := byteToInt(data[offset : offset+4])
-			offset += 4
-
-			if kind == 0 {
-				offset += 4
-			} else if kind == 1 {
-				iidLen := byteToInt(data[offset : offset+4])
-				offset += 4
-
-				offset += iidLen
-
-				offset += (-iidLen & 3)
-			}
 		}
 
 		// Handle multi-value properties
 		valueCount := 1
 		if isMultiValue {
-			valueCount = byteToInt(data[offset : offset+4])
-			offset += 4
+			valueCount, err = r.readInt32()
+			if err != nil {
+				return e(err)
+			}
 		}
 
-		if valueCount > 1024 && valueCount > len(data) {
-			return nil, fmt.Errorf("count is too large: %d", valueCount)
+		if valueCount > 1024 && valueCount > r.in.Len() {
+			return e(fmt.Errorf("value count is too large: %d, rest len %d", valueCount, r.in.Len()))
 		}
 
-		attrData := []byte{}
-
-		for i := 0; i < valueCount; i++ {
+		for range valueCount {
 			length := typeSize
 			if typeSize < 0 {
-				length = byteToInt(data[offset : offset+4])
-				offset += 4
+				length, err = r.readInt32()
+				if err != nil {
+					return e(err)
+				}
 			}
 
-			// Read the data in
-			attrData = append(attrData, data[offset:offset+length]...)
+			if length < 1 {
+				continue
+			}
 
-			offset += length
-			offset += (-length & 3)
+			// Read the data.
+			err = r.rb(length, func(v []byte) { attr.Data = append(attr.Data, v...) })
+			if err != nil {
+				return e(err)
+			}
+
+			if err := r.skip(-length & 3); err != nil {
+				return e(err)
+			}
 		}
 
-		attrs = append(attrs, MAPIAttribute{Type: attrType, Name: attrName, Data: attrData, GUID: guid})
+		attrs = append(attrs, attr)
 	}
 
 	return attrs, nil
@@ -103,15 +206,17 @@ func getTypeSize(attrType int) int {
 	case szmapiString, szmapiUnicodeString, szmapiObject, szmapiBinary:
 		return -1
 	}
+
 	return 0
 }
 
 // nolint: godot
 const (
-	mvFlag = 0x1000 // OR with type means multiple values
+	GuidExistsFlag = 0x8000
+	multiValueFlag = 0x1000 // OR with type means multiple values.
 
-	// szmapiUnspecified   = 0x0000 //# MAPI Unspecified
-	// szmapiNull          = 0x0001 //# MAPI null property
+	szmapiUnspecified   = 0x0000 //# MAPI Unspecified
+	szmapiNull          = 0x0001 //# MAPI null property
 	szmapiShort         = 0x0002 //# MAPI short (signed 16 bits)
 	szmapiInt           = 0x0003 //# MAPI integer (signed 32 bits)
 	szmapiFloat         = 0x0004 //# MAPI float (4 bytes)
@@ -418,6 +523,7 @@ const (
 	MAPIAttachLongFilename                    = 0x3707
 	MAPIAttachPathname                        = 0x3708
 	MAPIAttachRendering                       = 0x3709
+	MAPIAttachContentId                       = 0x3712
 	MAPIAttachTag                             = 0x370A
 	MAPIRenderingPosition                     = 0x370B
 	MAPIAttachTransportName                   = 0x370C
