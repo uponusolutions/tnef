@@ -5,17 +5,21 @@
 With this library you can extract the body and attachments from Transport
 Neutral Encapsulation Format (TNEF) files.
 
-This work is based on https://github.com/koodaamo/tnefparse,
-http://www.freeutils.net/source/jtnef/ and https://github.com/teamwork/tnef.
+This work is based on 
+https://github.com/koodaamo/tnefparse,
+http://www.freeutils.net/source/jtnef/,
+https://github.com/teamwork/tnef and
+https://github.com/verdammelt/tnef.
+
 
 ## Example usage
 
 ```go
 package main
-import (
 
-	"io/ioutil"
+import (
 	"os"
+
 	"github.com/uponus/tnef"
 )
 
@@ -26,9 +30,17 @@ func main() {
 	}
 	wd, _ := os.Getwd()
 	for _, a := range t.Attachments {
-		ioutil.WriteFile(wd+"/"+a.Title, a.Data, 0777)
+		os.WriteFile(wd+"/"+a.Title, a.Data, 0777)
 	}
-	ioutil.WriteFile(wd+"/bodyHTML.html", t.BodyHTML, 0777)
-	ioutil.WriteFile(wd+"/bodyPlain.html", t.Body, 0777)
+
+	htmlBody, found := tnef.AttributeByMAPIName(t.MAPIAttributes, tnef.MAPIBodyHTML)
+	if found {
+		os.WriteFile(wd+"/bodyHTML.html", htmlBody.Data, 0777)
+	}
+
+	txtBody, found := tnef.AttributeByMAPIName(t.MAPIAttributes, tnef.MAPIBody)
+	if found {
+		os.WriteFile(wd+"/bodyTxt.html", txtBody.Data, 0777)
+	}
 }
 ```
