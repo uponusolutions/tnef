@@ -1,7 +1,6 @@
 package tnef
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -45,14 +44,14 @@ func TestAttachments(t *testing.T) {
 		//	"data-before-name-body.rtf",
 		//}},
 		// no longer panics and ignores invalid data
-		{"garbage-at-end", []string{}, ""},
+		{"garbage-at-end", nil, ""},
 		//{"long-filename", []string{
 		//	"long-filename-body.rtf",
 		//}},
 		//{"missing-filenames", []string{
 		//	"missing-filenames-body.rtf",
 		//}},
-		{"multi-name-property", []string{}, ""},
+		{"multi-name-property", nil, ""},
 		//{"multi-value-attribute", []string{
 		//	"208225__5_seconds__Voice_Mail.mp3",
 		//	"multi-value-attribute-body.rtf",
@@ -86,27 +85,20 @@ func TestAttachments(t *testing.T) {
 		{"badchecksum", nil, "tnef signature not found"},
 		{"empty-file", nil, "tnef signature not found"},
 
+		// S/MIME signed.
 		{"signed", []string{"smime.p7m"}, ""},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
-			raw, err := os.ReadFile(filepath.Join("testdata", tc.in+".tnef"))
-			require.NoError(t, err)
-
-			out, err := Decode(raw)
+			tnef, err := DecodeFile(filepath.Join("testdata", tc.in+".tnef"))
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, len(tc.attachments), len(out.Attachments))
-
-			titles := []string{}
-			for _, a := range out.Attachments {
-				titles = append(titles, a.Title)
-			}
-			assert.Equal(t, tc.attachments, titles)
+			assert.Equal(t, len(tc.attachments), len(tnef.Attachments))
+			assert.Equal(t, tc.attachments, allTitles(tnef))
 		})
 	}
 }
