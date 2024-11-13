@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-// nolint: godot
 const (
 	tnefSignature = 0x223e9f78
 	lvlMessage    = 0x01
@@ -62,6 +61,17 @@ type tnefAttribute struct {
 	Length   int
 }
 
+// Data contains the various data from the extracted TNEF file.
+type Data struct {
+	Body              []byte
+	Attachments       []*Attachment
+	MAPIAttributes    []*MAPIAttribute
+	MessageClass      string
+	Subject           string
+	CodePagePrimary   int
+	CodePageSecondary int
+}
+
 // Attachment contains standard attachments that are embedded
 // within the TNEF file, with the name and data of the file extracted.
 type Attachment struct {
@@ -70,18 +80,7 @@ type Attachment struct {
 	Data           []byte
 	MIMEType       string
 	ContentID      string
-	MAPIAttributes []MAPIAttribute
-}
-
-// Data contains the various data from the extracted TNEF file.
-type Data struct {
-	Body              []byte
-	Attachments       []*Attachment
-	MAPIAttributes    []MAPIAttribute
-	MessageClass      string
-	Subject           string
-	CodePagePrimary   int
-	CodePageSecondary int
+	MAPIAttributes []*MAPIAttribute
 }
 
 func (a *Attachment) addAttr(attr tnefAttribute) error {
@@ -194,9 +193,11 @@ func Decode(data []byte) (*Data, error) {
 				return e(errors.New("attachment level reached, but attachment is nil"))
 			}
 
-			attachment.addAttr(attr)
+			if err := attachment.addAttr(attr); err != nil {
+				return e(err)
+			}
 		default:
-			return nil, fmt.Errorf("invalid level type attribute: %d\n", attr.Level)
+			return e(fmt.Errorf("invalid level type attribute: %d", attr.Level))
 		}
 	}
 

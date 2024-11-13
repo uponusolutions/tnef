@@ -19,7 +19,7 @@ type MAPIAttribute struct {
 	GUID  int
 }
 
-// Returns true if attribute has the given name.
+// HasName returns true if attribute has the given name.
 // The check is case insensitive.
 func (m *MAPIAttribute) HasName(name string) bool {
 	return slices.ContainsFunc(m.Names, func(n string) bool {
@@ -34,7 +34,7 @@ func (m *MAPIAttribute) AsString() (string, error) {
 }
 
 // AttributeByMAPIName returns the attribute found by name.
-func AttributeByMAPIName(attrs []MAPIAttribute, mapiName int) (attr MAPIAttribute, found bool) {
+func AttributeByMAPIName(attrs []*MAPIAttribute, mapiName int) (attr *MAPIAttribute, found bool) {
 	for _, a := range attrs {
 		if mapiName == a.Name {
 			return a, true
@@ -45,12 +45,11 @@ func AttributeByMAPIName(attrs []MAPIAttribute, mapiName int) (attr MAPIAttribut
 }
 
 // AttributeByName returns the attribute found by one of its names.
-func AttributeByName(attrs []MAPIAttribute, name string) (attr MAPIAttribute, found bool) {
+func AttributeByName(attrs []*MAPIAttribute, name string) (attr *MAPIAttribute, found bool) {
 	for _, a := range attrs {
 		if a.HasName(name) {
 			return a, true
 		}
-
 	}
 
 	return attr, found
@@ -68,7 +67,7 @@ func readAttributeTypeAndName(r *tnefBytesReader) (attrType, attrName int, err e
 }
 
 func readGuidAndNamesLen(r *tnefBytesReader) (guid, namesLen int, err error) {
-	// TODO: Convert to UUID bytes not int?
+	// TODO: Convert to UUID bytes to other format?
 	err = r.rb(16, func(v []byte) { guid = byteToInt(v) })
 	if err != nil {
 		return 0, 0, err
@@ -79,8 +78,8 @@ func readGuidAndNamesLen(r *tnefBytesReader) (guid, namesLen int, err error) {
 	return guid, namesLen, err
 }
 
-func decodeMapi(data []byte) ([]MAPIAttribute, error) {
-	e := func(err error) ([]MAPIAttribute, error) {
+func decodeMapi(data []byte) ([]*MAPIAttribute, error) {
+	e := func(err error) ([]*MAPIAttribute, error) {
 		return nil, fmt.Errorf("mapi decode error: %w", err)
 	}
 
@@ -91,9 +90,9 @@ func decodeMapi(data []byte) ([]MAPIAttribute, error) {
 		return e(err)
 	}
 
-	var attrs []MAPIAttribute
+	var attrs []*MAPIAttribute
 	for range numProperties {
-		var attr MAPIAttribute
+		attr := &MAPIAttribute{}
 
 		/* Read type and name */
 		attr.Type, attr.Name, err = readAttributeTypeAndName(r)

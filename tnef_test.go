@@ -1,7 +1,6 @@
 package tnef
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +15,6 @@ func TestAttachments(t *testing.T) {
 		attachments []string
 		errContains string
 	}{
-
 		{"attachments", []string{
 			"ZAPPA_~2.JPG",
 			"bookmark.htm",
@@ -140,5 +138,17 @@ func TestDataBeforeName(t *testing.T) {
 	tnef, err := DecodeFile("testdata/data-before-name.tnef")
 	require.NoError(t, err)
 
-	fmt.Printf("tnef: %+v\n", tnef)
+	assert.Equal(t, []string{"AUTOEXEC.BAT", "CONFIG.SYS", "boot.ini"}, allTitles(tnef))
+}
+
+///////////////////////////////////////////////////////////////////////////
+// Helpers
+///////////////////////////////////////////////////////////////////////////
+
+func allTitles(tnef *Data) (titles []string) {
+	for _, a := range tnef.Attachments {
+		titles = append(titles, a.Title)
+	}
+
+	return titles
 }

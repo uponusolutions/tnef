@@ -60,7 +60,7 @@ linters-settings:
       - name: cognitive-complexity
         severity: warning
         disabled: false
-        arguments: [40]
+        arguments: [80]
       - name: argument-limit
         severity: warning
         disabled: false

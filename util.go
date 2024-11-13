@@ -92,6 +92,7 @@ func byteToInt(data []byte) int {
 	return num
 }
 
+// ToUTF8String converts data of type t to an UTF-8 string.
 func ToUTF8String(t int, data []byte) (string, error) {
 	switch t {
 	case szmapiUnicodeString:
@@ -120,6 +121,7 @@ func bytesToUint16(a []byte) []uint16 {
 	return arr
 }
 
+// nolint unused
 func debugAttachments(attachments []*Attachment) {
 	for _, a := range attachments {
 		fmt.Printf("Title %s, LongFileName: %s, MIMEType %s, ContentID %s, DataLen %d\n",
@@ -128,7 +130,8 @@ func debugAttachments(attachments []*Attachment) {
 	}
 }
 
-func debugAttributes(attrs []MAPIAttribute) {
+// nolint unused
+func debugAttributes(attrs []*MAPIAttribute) {
 	for _, a := range attrs {
 		fmt.Printf("Name %x, Type %x, Names %+v, Guid %x, Data %s\n",
 			a.Name, a.Type, a.Names, a.GUID, a.Data)
