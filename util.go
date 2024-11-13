@@ -121,17 +121,17 @@ func bytesToUint16(a []byte) []uint16 {
 	return arr
 }
 
-// nolint unused
-func debugAttachments(attachments []*Attachment) {
+// DebugAttachments prints attachments to stdout.
+func DebugAttachments(attachments []*Attachment) {
 	for _, a := range attachments {
 		fmt.Printf("Title %s, LongFileName: %s, MIMEType %s, ContentID %s, DataLen %d\n",
 			a.Title, a.LongFileName, a.MIMEType, a.ContentID, len(a.Data))
-		debugAttributes(a.MAPIAttributes)
+		DebugAttributes(a.MAPIAttributes)
 	}
 }
 
-// nolint unused
-func debugAttributes(attrs []*MAPIAttribute) {
+// DebugAttributes prints attributes to stdout.
+func DebugAttributes(attrs []*MAPIAttribute) {
 	for _, a := range attrs {
 		fmt.Printf("Name %x, Type %x, Names %+v, Guid %x, Data %s\n",
 			a.Name, a.Type, a.Names, a.GUID, a.Data)
