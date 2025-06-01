@@ -125,8 +125,10 @@ func DecodeFile(path string) (*Data, error) {
 	return Decode(data)
 }
 
-// Decode will accept a stream of bytes in the TNEF format and extract the
-// attachments and body into a Data object.
+// Decode accepts a byte stream in TNEF format and extracts the message
+// body and attachments into a Data object.
+// The returned parsed TNEF may be non-nil if some data was successfully
+// parsed before an error occurred.
 func Decode(data []byte) (*Data, error) {
 	e := func(err error) (*Data, error) {
 		return nil, fmt.Errorf("tnef decode error: %w", err)
@@ -159,7 +161,8 @@ func Decode(data []byte) (*Data, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return e(err)
+
+			return tnef, err
 		}
 
 		if attr.Name == ATTATTACHRENDDATA {
