@@ -1,4 +1,4 @@
-module github.com/uponus/tnef
+module github.com/uponusolutions/tnef
 
 go 1.23.0
 
